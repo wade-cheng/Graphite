@@ -63,7 +63,7 @@ pub struct NodeGraphMessageHandler {
 	pub drag_start_chain_nodes: Vec<NodeId>,
 	/// If dragging the background to create a box selection, this stores its starting point in node graph coordinates,
 	/// plus a flag indicating if it has been dragged since the mousedown began.
-	box_selection_start: Option<(DVec2, bool)>,
+	pub box_selection_start: Option<(DVec2, bool)>,
 	/// Restore the selection before box selection if it is aborted
 	selection_before_pointer_down: Vec<NodeId>,
 	/// If the grip icon is held during a drag, then shift without pushing other nodes
@@ -747,31 +747,8 @@ impl<'a> MessageHandler<NodeGraphMessage, NodeGraphMessageContext<'a>> for NodeG
 
 				// Create the add node popup on right click, then exit
 				if right_click {
-					// Abort dragging a node
-					if self.drag_start.is_some() {
-						self.drag_start = None;
-						responses.add(DocumentMessage::AbortTransaction);
-						responses.add(NodeGraphMessage::SelectedNodesSet {
-							nodes: self.selection_before_pointer_down.clone(),
-						});
-						return;
-					}
-					// Abort a box selection
-					if self.box_selection_start.is_some() {
-						self.box_selection_start = None;
-						responses.add(NodeGraphMessage::SelectedNodesSet {
-							nodes: self.selection_before_pointer_down.clone(),
-						});
-						responses.add(FrontendMessage::UpdateBox { box_selection: None });
-						return;
-					}
-					// Abort dragging a wire
-					if self.wire_in_progress_from_connector.is_some() {
-						self.wire_in_progress_from_connector = None;
-						self.wire_in_progress_type = FrontendGraphDataType::General;
-						self.wire_in_progress_to_connector = None;
-						responses.add(DocumentMessage::AbortTransaction);
-						responses.add(FrontendMessage::UpdateWirePathInProgress { wire_path: None });
+					let aborted = self.abort_actions(responses);
+					if aborted {
 						return;
 					}
 
@@ -2615,6 +2592,39 @@ impl NodeGraphMessageHandler {
 		}
 
 		Some(NodeGraphErrorDiagnostic { position: position.into(), error })
+	}
+
+	/// Try to abort node graph actions (as if right click or escape was pressed), returning whether an abort occurred.
+	pub fn abort_actions(&mut self, responses: &mut VecDeque<Message>) -> bool {
+		// Abort dragging a node
+		if self.drag_start.is_some() {
+			self.drag_start = None;
+			responses.add(DocumentMessage::AbortTransaction);
+			responses.add(NodeGraphMessage::SelectedNodesSet {
+				nodes: self.selection_before_pointer_down.clone(),
+			});
+			return true;
+		}
+		// Abort a box selection
+		if self.box_selection_start.is_some() {
+			self.box_selection_start = None;
+			responses.add(NodeGraphMessage::SelectedNodesSet {
+				nodes: self.selection_before_pointer_down.clone(),
+			});
+			responses.add(FrontendMessage::UpdateBox { box_selection: None });
+			return true;
+		}
+		// Abort dragging a wire
+		if self.wire_in_progress_from_connector.is_some() {
+			self.wire_in_progress_from_connector = None;
+			self.wire_in_progress_type = FrontendGraphDataType::General;
+			self.wire_in_progress_to_connector = None;
+			responses.add(DocumentMessage::AbortTransaction);
+			responses.add(FrontendMessage::UpdateWirePathInProgress { wire_path: None });
+			return true;
+		}
+
+		return false;
 	}
 
 	fn update_layer_panel(network_interface: &NodeNetworkInterface, selection_network_path: &[NodeId], collapsed: &CollapsedLayers, layers_panel_open: bool, responses: &mut VecDeque<Message>) {

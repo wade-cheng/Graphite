@@ -479,6 +479,11 @@ impl MessageHandler<DocumentMessage, DocumentMessageContext<'_>> for DocumentMes
 				if self.node_graph_handler.drag_start.is_some() {
 					responses.add(DocumentMessage::AbortTransaction);
 					self.node_graph_handler.drag_start = None;
+				} else if self.node_graph_handler.box_selection_start.is_some()
+					|| self.node_graph_handler.wire_in_progress_from_connector.is_some()
+					|| self.node_graph_handler.wire_in_progress_to_connector.is_some()
+				{
+					self.node_graph_handler.abort_actions(responses);
 				} else if self
 					.node_graph_handler
 					.context_menu
